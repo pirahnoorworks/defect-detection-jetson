@@ -1,5 +1,7 @@
 # Jetson Defect Detection Management System
 
+![Jetson deployment workflow](https://github.com/pirahnoorworks/defect-detection-jetson/actions/workflows/jetson-deploy.yml/badge.svg?branch=jetson-ready)
+
 This project demonstrates an edge-friendly defect detection workflow for industrial inspection scenarios. It combines a lightweight FastAPI dashboard, image-based inference, and a YOLOv8 training pipeline in a single local-first prototype that can also be adapted for Jetson deployment.
 
 ## Portfolio note
