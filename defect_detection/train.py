@@ -4,6 +4,7 @@ import argparse
 import json
 import shutil
 from pathlib import Path
+from typing import Iterable
 
 import cv2
 import numpy as np
@@ -109,6 +110,49 @@ def export_model_artifact(output_dir: str | Path, weights_path: str | Path) -> d
     return manifest
 
 
+def export_model_for_edge(
+    weights_path: str | Path,
+    output_dir: str | Path | None = None,
+    formats: Iterable[str] = ("onnx", "engine"),
+    imgsz: int = 640,
+) -> dict:
+    source = Path(weights_path)
+    if not source.exists():
+        raise FileNotFoundError(f"Weights file not found: {source}")
+
+    export_root = Path(output_dir or source.parent / "edge")
+    export_root.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from ultralytics import YOLO
+    except ImportError as exc:
+        raise RuntimeError("Install ultralytics to export YOLO model artifacts") from exc
+
+    model = YOLO(str(source))
+    exported_paths: dict[str, str | dict[str, str]] = {}
+    for fmt in formats:
+        try:
+            exported_path = str(model.export(format=fmt, imgsz=imgsz, simplify=True))
+            exported_file = Path(exported_path)
+            if exported_file.exists():
+                target_path = export_root / exported_file.name
+                if exported_file != target_path:
+                    shutil.copy2(exported_file, target_path)
+                exported_paths[fmt] = str(target_path)
+            else:
+                exported_paths[fmt] = exported_path
+        except Exception as exc:  # pragma: no cover - defensive path for Jetson environments
+            exported_paths[fmt] = {"error": str(exc)}
+
+    manifest = {
+        "weights_path": str(source.resolve()),
+        "export_dir": str(export_root.resolve()),
+        "exports": exported_paths,
+    }
+    (export_root / "edge_manifest.json").write_text(json.dumps(manifest, indent=2))
+    return manifest
+
+
 def train_model(
     data_root: str | Path,
     epochs: int = 1,
@@ -145,7 +189,9 @@ def train_model(
 
     model = YOLO("yolov8n.pt")
     model.train(data=str(config_path), epochs=epochs, imgsz=640, project=str(root / "runs"), name="defect_detection")
-    export_model_artifact(root / "artifacts", root / "runs" / "defect_detection" / "weights" / "best.pt")
+    best_weights = root / "runs" / "defect_detection" / "weights" / "best.pt"
+    export_model_artifact(root / "artifacts", best_weights)
+    export_model_for_edge(best_weights, output_dir=root / "artifacts" / "edge")
     return plan
 
 
@@ -155,6 +201,9 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs")
     parser.add_argument("--run", action="store_true", help="Execute a real YOLOv8 training run")
     parser.add_argument("--prepare-sample", action="store_true", help="Generate a small synthetic defect dataset for local testing")
+    parser.add_argument("--export-edge", action="store_true", help="Export trained YOLO weights to ONNX/TensorRT artifacts")
+    parser.add_argument("--weights", default=None, help="Optional path to a YOLO weights file for edge export")
+    parser.add_argument("--export-format", nargs="+", default=["onnx", "engine"], choices=["onnx", "engine"], help="Model export formats for Jetson")
     args = parser.parse_args()
 
     root = Path(args.data_root)
@@ -163,6 +212,11 @@ def main() -> None:
         print(f"Prepared sample dataset at {root}")
     else:
         prepare_real_dataset(root)
+
+    if args.export_edge:
+        weights_path = Path(args.weights) if args.weights else root / "runs" / "defect_detection" / "weights" / "best.pt"
+        print(json.dumps(export_model_for_edge(weights_path, output_dir=root / "artifacts" / "edge", formats=tuple(args.export_format)), indent=2))
+        return
 
     result = train_model(root, epochs=args.epochs, dry_run=not args.run, output_path=root / "data.yaml")
     print(json.dumps(result, indent=2))

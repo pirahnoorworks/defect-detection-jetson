@@ -1,0 +1,30 @@
+name: Jetson deployment workflow
+
+on:
+  push:
+    branches: [jetson-ready]
+  pull_request:
+    branches: [jetson-ready]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run compile check
+        run: python -m compileall defect_detection
+
+      - name: Build Jetson container image
+        run: docker build -f Dockerfile.jetson -t defect-detection-jetson:jetson .

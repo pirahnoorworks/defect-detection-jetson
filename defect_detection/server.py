@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import io
 import os
-from pathlib import Path
-from typing import Optional
 
 import cv2
-import numpy as np
 from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
-from PIL import Image
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from defect_detection.db import init_db, list_inspections, save_inspection
+from defect_detection.inference import analyze_image
 
 app = FastAPI(title="Defect Detection API", version="0.1.0")
 
@@ -24,33 +20,53 @@ def index() -> str:
     return "<h1>Defect Detection API</h1><p>Upload an image to inspect it.</p>"
 
 
+@app.get("/health")
+def health() -> JSONResponse:
+    return JSONResponse(content={"status": "ok", "service": "defect-detection-jetson"})
+
+
 @app.post("/predict")
 def predict(image: UploadFile = File(...)) -> JSONResponse:
     contents = image.file.read()
-    image_bytes = np.frombuffer(contents, dtype=np.uint8)
-    frame = cv2.imdecode(image_bytes, cv2.IMREAD_COLOR)
+    result = analyze_image(contents, image.filename or "upload.jpg")
+    save_inspection(DB_PATH, result["filename"], result["label"], result["confidence"])
+    return JSONResponse(content=result)
 
-    if frame is None:
-        return JSONResponse(status_code=400, content={"error": "Unable to read image"})
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 140, 255, cv2.THRESH_BINARY_INV)
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+@app.get("/camera/stream")
+def camera_stream() -> StreamingResponse:
+    camera_index = int(os.getenv("CAMERA_INDEX", "0"))
+    cap = cv2.VideoCapture(camera_index)
+    if not cap.isOpened():
+        return JSONResponse(status_code=503, content={"error": "Unable to open camera"})
 
-    defect_found = len(contours) > 0
-    label = "defect" if defect_found else "normal"
-    confidence = min(0.99, 0.6 + min(len(contours), 10) * 0.03)
+    def generate() -> object:
+        try:
+            while True:
+                ok, frame = cap.read()
+                if not ok:
+                    break
 
-    save_inspection(DB_PATH, image.filename or "upload.jpg", label, confidence)
+                result = analyze_image(cv2.imencode(".jpg", frame)[1].tobytes(), "camera.jpg")
+                annotated = frame.copy()
+                for box in result.get("boxes", []):
+                    x1 = int(box["x"])
+                    y1 = int(box["y"])
+                    x2 = int(box["x"] + box["w"])
+                    y2 = int(box["y"] + box["h"])
+                    cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                    cv2.putText(annotated, result["label"], (x1, max(0, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
-    return JSONResponse(
-        content={
-            "filename": image.filename,
-            "label": label,
-            "confidence": round(float(confidence), 3),
-            "defect_count": len(contours),
-        }
-    )
+                _, encoded = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+                payload = encoded.tobytes()
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + payload + b"\r\n"
+                )
+        finally:
+            cap.release()
+
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
 @app.get("/inspections")
@@ -71,7 +87,8 @@ def inspections() -> list[dict]:
 def main() -> None:
     import uvicorn
 
-    uvicorn.run("defect_detection.server:app", host="0.0.0.0", port=8000, reload=False)
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run("defect_detection.server:app", host="0.0.0.0", port=port, reload=False)
 
 
 if __name__ == "__main__":

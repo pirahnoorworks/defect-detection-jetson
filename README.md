@@ -44,6 +44,23 @@ This command prepares the dataset layout, writes a YOLO-compatible configuration
 - defect_detection/db.py: Inspection history persistence
 - tests/: Regression tests for inference, dataset preparation, and dashboard behavior
 
+## Jetson deployment notes
+
+For Jetson deployment, the repository now includes a dedicated server entry point and a container-oriented workflow:
+
+```bash
+python -m defect_detection.server
+```
+
+Or build and run the edge container image:
+
+```bash
+docker build -f Dockerfile.jetson -t defect-detection-jetson:jetson .
+docker run --rm --runtime nvidia -p 8000:8000 -e PORT=8000 defect-detection-jetson:jetson
+```
+
+The service exposes a health check at `/health` and uses the same inference logic as the dashboard path.
+
 ## Notes
 
 The current implementation is designed as a portfolio demo and a practical foundation for future enhancements such as model serving, better training quality, and deployment packaging.
