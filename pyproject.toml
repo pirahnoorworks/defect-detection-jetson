@@ -1,0 +1,22 @@
+[project]
+name = "defect-detection-jetson"
+version = "0.1.0"
+description = "Edge defect detection management system for Jetson and macOS"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.111.0",
+  "uvicorn[standard]>=0.30.0",
+  "opencv-python-headless>=4.10.0",
+  "numpy>=1.26.0",
+  "pillow>=10.4.0",
+  "pytest>=8.3.0",
+  "python-multipart>=0.0.9"
+]
+
+[project.scripts]
+defect-train = "defect_detection.train:main"
+defect-server = "defect_detection.app:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"

@@ -1,0 +1,7 @@
+path: data/kolektorsdd
+train: images/train
+val: images/val
+
+ncfg: yolov8n.yaml
+names:
+  0: defect
