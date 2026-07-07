@@ -1,0 +1,23 @@
+FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0
+
+WORKDIR /app
+
+# Install Python dependencies
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy project files
+COPY pyproject.toml README.md ./
+COPY defect_detection ./defect_detection
+COPY requirements.txt ./
+
+# Install Python packages
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+EXPOSE 8000
+
+# Run the server
+CMD ["python3", "-m", "defect_detection.app"]
