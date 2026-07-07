@@ -143,19 +143,12 @@ def index() -> str:
           <p><a href='/model-download' download>Download latest model weights</a></p>
         </div>
         <div class='card'>
-          <h2>Recent inspections</h2>
-          <pre id='inspections'></pre>
-        </div>
-        <div class='card'>
           <h2>Detection preview</h2>
           <div id='result'>
             <p style='opacity:0.75;'>Upload an image and click Inspect to compare the contour-based and placeholder YOLO-style outputs.</p>
           </div>
         </div>
         <script>
-          fetch('/inspections').then(r => r.json()).then(data => {
-            document.getElementById('inspections').textContent = JSON.stringify(data, null, 2);
-          });
           fetch('/training-status').then(r => r.json()).then(data => {
             document.getElementById('training').textContent = JSON.stringify(data, null, 2);
           });
