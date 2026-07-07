@@ -170,9 +170,9 @@ def index() -> str:
                   <p>Detected boxes: ${data.contour.boxes.length}</p>
                 </div>
                 <div class='card'>
-                  <h3>Placeholder YOLO-style inference</h3>
+                  <h3>YOLO inference</h3>
                   <p><strong>Label:</strong> ${data.yolo.label} &nbsp; <strong>Confidence:</strong> ${data.yolo.confidence}</p>
-                  <img src='${data.yolo.image_preview}' alt='yolo-style preview' style='max-width:100%; border-radius:8px;' />
+                  <img src='${data.yolo.image_preview}' alt='yolo preview' style='max-width:100%; border-radius:8px;' />
                   <p>Detected boxes: ${data.yolo.boxes.length}</p>
                   <p><em>${data.yolo.note}</em></p>
                 </div>
